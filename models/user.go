@@ -11,6 +11,7 @@ type User struct {
 	Firstname string `json:"firstName" form:"firstName"`
 	Lastname  string `json:"lastName" form:"lastName"`
 	Email     string `json:"email" form:"email"`
+	Password  string `json:"password" form:"password"`
 }
 
 // Validate validates user model given a rule
