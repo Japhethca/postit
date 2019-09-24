@@ -4,23 +4,28 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/japhethca/postit-api/service"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"log"
 	"net/http"
+	"os"
 )
 
 func main() {
-	router := gin.Default()
-	dbConnStr := ""
-	db, err := sql.Open("postgres", dbConnStr)
+	err := godotenv.Load()
 	if err != nil {
-		panic(fmt.Sprint("Failed to open db connection. ", err))
+		log.Println("Failed to read .env configuration file.")
 	}
 
-	svc := service{
-		router:      router,
-		db:          db,
-		controllers: &controllers{db},
+	dbConnStr := os.Getenv("DATABASE_URL")
+	db, err := sql.Open("postgres", dbConnStr)
+	if err != nil {
+		log.Fatal(fmt.Sprint("Failed to open db connection. ", err))
 	}
-	svc.InitRoutes()
-	http.ListenAndServe(":8001", &svc)
+
+	router := gin.Default()
+	svc := service.New(router, db)
+	svc.Init()
+	http.ListenAndServe(":8001", svc)
 }
