@@ -25,6 +25,7 @@ func New(router *gin.Engine, db *sql.DB) *APIService {
 
 func (svc *APIService) initControllers() {
 	svc.setControllerDB(&authController)
+
 }
 
 func (svc *APIService) setControllerDB(controller db.Setter) {
@@ -38,6 +39,7 @@ func (svc *APIService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (svc *APIService) initRoutes() {
 	apiV1 := svc.router.Group("/api/v1")
 	apiV1.POST("/auth/signup", authController.Signup)
+	apiV1.POST("/auth/login", authController.Login)
 }
 
 func (svc *APIService) Init() {

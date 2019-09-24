@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"github.com/gin-gonic/gin"
 	"github.com/japhethca/postit-api/db"
-	"github.com/japhethca/postit-api/db/manager"
-	"github.com/japhethca/postit-api/db/models"
+	"github.com/japhethca/postit-api/db/dao"
+	"github.com/japhethca/postit-api/models"
 	"github.com/japhethca/postit-api/service/validator"
 	"github.com/lib/pq"
 	"net/http"
@@ -21,38 +21,57 @@ func (c *Auth) SetDB(db *sql.DB) {
 	c.db = db
 }
 
-// Signup controller signs up user
+// Signup handles user registration
 func (c *Auth) Signup(ctx *gin.Context) {
-	var user models.User
-	bindBodyOrJSON(ctx, &user)
-	verrs := validator.SignupValidator(&user)
+	var signupFields validator.SignupFields
+	bindBodyOrJSON(ctx, &signupFields)
+	verrs := validator.SignupValidator(&signupFields)
 	if len(verrs) > 0 {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error":      verrs,
-			"status":     http.StatusText(http.StatusBadRequest),
-			"statusCode": http.StatusBadRequest,
-		})
+		errorResponse(ctx, http.StatusBadRequest, verrs)
 		return
 	}
 
-	userManager := manager.UserManager{DB: c.db}
-	newUser, err := userManager.CreateUser(user)
+	if !sameString(signupFields.Password, signupFields.ConfirmPassword) {
+		errorResponse(ctx, http.StatusBadRequest, "Passwords did not match")
+		return
+	}
+
+	userDAO := dao.UserDAO{DB: c.db}
+	user := models.User{
+		Email:     signupFields.Email,
+		Firstname: signupFields.FirstName,
+		Lastname:  signupFields.LastName,
+	}
+	hashedPassword, _ := HashPassword(signupFields.Password)
+	user.Password = hashedPassword
+
+	newUser, err := userDAO.CreateUser(user)
 	if err != nil {
-		dbError := err.(*pq.Error)
-		if dbError.Code == db.DatabaseUniqueViolation {
-			ctx.JSON(http.StatusConflict, gin.H{
-				"error":      "User with this credentials already exists",
-				"status":     http.StatusText(http.StatusConflict),
-				"statusCode": http.StatusConflict,
-			})
+		dbError, ok := err.(*pq.Error)
+		if ok && dbError.Code == db.DatabaseUniqueViolation {
+			errorResponse(ctx, http.StatusConflict, "User with this credentials already exists")
 			return
 		}
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error":      "Something unexpected happened. Its not you, its us.",
-			"status":     http.StatusText(http.StatusInternalServerError),
-			"statusCode": http.StatusInternalServerError,
-		})
+		errorResponse(ctx, http.StatusInternalServerError, "Its not you, its us. We are working hard to resolve this.")
 		return
 	}
 	ctx.JSON(http.StatusCreated, newUser)
+}
+
+// Login handles user login
+func (c *Auth) Login(ctx *gin.Context) {
+	var loginFields validator.LoginFields
+	bindBodyOrJSON(ctx, &loginFields)
+	verrs := validator.LoginValidator(&loginFields)
+	if len(verrs) > 0 {
+		errorResponse(ctx, http.StatusBadRequest, verrs)
+		return
+	}
+	userManager := dao.UserDAO{DB: c.db}
+	user, err := userManager.GetUserByEmail(loginFields.Email)
+	if err != nil || !SamePassword(user.Password, loginFields.Password) {
+		errorResponse(ctx, http.StatusUnauthorized, "Invalid login credentials")
+		return
+	}
+	ctx.JSON(http.StatusOK, user)
 }

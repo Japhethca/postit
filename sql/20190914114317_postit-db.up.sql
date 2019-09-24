@@ -3,6 +3,7 @@ CREATE TABLE ps_user (
   firstname VARCHAR(255),
   lastname VARCHAR(255),
   email VARCHAR(500) UNIQUE NOT NULL,
+  password VARCHAR(1024) NOT NULL,
   PRIMARY KEY (user_id)
 );
 
