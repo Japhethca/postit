@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"database/sql"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/japhethca/postit-api/db"
 	"github.com/japhethca/postit-api/db/dao"
@@ -9,6 +10,7 @@ import (
 	"github.com/japhethca/postit-api/service/validator"
 	"github.com/lib/pq"
 	"net/http"
+	"os"
 )
 
 // Auth holds all controllers for authentication routes
@@ -27,12 +29,12 @@ func (c *Auth) Signup(ctx *gin.Context) {
 	bindBodyOrJSON(ctx, &signupFields)
 	verrs := validator.SignupValidator(&signupFields)
 	if len(verrs) > 0 {
-		errorResponse(ctx, http.StatusBadRequest, verrs)
+		ErrorResponse(ctx, http.StatusBadRequest, nil, verrs)
 		return
 	}
 
 	if !sameString(signupFields.Password, signupFields.ConfirmPassword) {
-		errorResponse(ctx, http.StatusBadRequest, "Passwords did not match")
+		ErrorResponse(ctx, http.StatusBadRequest, nil, "Passwords did not match")
 		return
 	}
 
@@ -42,20 +44,24 @@ func (c *Auth) Signup(ctx *gin.Context) {
 		Firstname: signupFields.FirstName,
 		Lastname:  signupFields.LastName,
 	}
-	hashedPassword, _ := HashPassword(signupFields.Password)
+	hashedPassword, _ := hashPassword(signupFields.Password)
 	user.Password = hashedPassword
 
 	newUser, err := userDAO.CreateUser(user)
 	if err != nil {
 		dbError, ok := err.(*pq.Error)
 		if ok && dbError.Code == db.DatabaseUniqueViolation {
-			errorResponse(ctx, http.StatusConflict, "User with this credentials already exists")
+			ErrorResponse(ctx, http.StatusConflict, nil, "User with this credentials already exists")
 			return
 		}
-		errorResponse(ctx, http.StatusInternalServerError, "Its not you, its us. We are working hard to resolve this.")
+		ErrorResponse(ctx, http.StatusInternalServerError, err, "Its not you, its us. We are working hard to resolve this.")
 		return
 	}
-	ctx.JSON(http.StatusCreated, newUser)
+	token, _ := generateToken(newUser)
+	ctx.JSON(http.StatusCreated, gin.H{
+		"user":  newUser,
+		"token": token,
+	})
 }
 
 // Login handles user login
@@ -64,14 +70,45 @@ func (c *Auth) Login(ctx *gin.Context) {
 	bindBodyOrJSON(ctx, &loginFields)
 	verrs := validator.LoginValidator(&loginFields)
 	if len(verrs) > 0 {
-		errorResponse(ctx, http.StatusBadRequest, verrs)
+		ErrorResponse(ctx, http.StatusBadRequest, nil, verrs)
 		return
 	}
 	userManager := dao.UserDAO{DB: c.db}
 	user, err := userManager.GetUserByEmail(loginFields.Email)
-	if err != nil || !SamePassword(user.Password, loginFields.Password) {
-		errorResponse(ctx, http.StatusUnauthorized, "Invalid login credentials")
+	if err != nil || !samePassword(user.Password, loginFields.Password) {
+		ErrorResponse(ctx, http.StatusUnauthorized, err, "Invalid login credentials")
 		return
 	}
-	ctx.JSON(http.StatusOK, user)
+	token, _ := generateToken(user)
+	ctx.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":    user.UserID,
+			"email": user.Email,
+		},
+		"token": token,
+	})
+}
+
+func (c *Auth) TestController(ctx *gin.Context) {
+	ctx.JSON(200, gin.H{
+		"message": "Welcome to Postit API, have fun creating your stuffs.",
+	})
+}
+
+type TokenClaims struct {
+	UserID int `json:"userId"`
+	jwt.StandardClaims
+}
+
+func generateToken(user models.User) (string, error) {
+	claim := TokenClaims{
+		user.UserID,
+		jwt.StandardClaims{
+			ExpiresAt: 15000,
+			Issuer:    "postit-api",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
+	return token.SignedString([]byte(os.Getenv("SECRET_KEY")))
 }
