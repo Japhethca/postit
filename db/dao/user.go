@@ -35,7 +35,7 @@ func (ud *UserDAO) getUser(qs string, values ...interface{}) (models.User, error
 func (ud *UserDAO) CreateUser(user models.User) (models.User, error) {
 	queryStr := `
 		Insert Into ps_user (firstname, lastname, email, password) 
-		Values ($1, $2, $3, $4) RETURNING user_id, firstname, lastname, email 
+		Values ($1, $2, $3, $4) RETURNING user_id, firstname, lastname, email, password
 	`
 	row := ud.DB.QueryRow(queryStr, user.Firstname, user.Lastname, user.Email, user.Password)
 	var newUser models.User
