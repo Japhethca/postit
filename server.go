@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/japhethca/postit-api/service"
 	"github.com/joho/godotenv"
@@ -25,6 +26,7 @@ func main() {
 	}
 
 	router := gin.Default()
+	router.Use(static.Serve("/", static.LocalFile("./web/build", true)))
 	svc := service.New(router, db)
 	svc.Init()
 	http.ListenAndServe(":8001", svc)
