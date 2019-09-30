@@ -5,6 +5,7 @@ import (
 	"net/url"
 )
 
+// SignupFields signup validation field
 type SignupFields struct {
 	Email           string `json:"email"`
 	FirstName       string `json:"firstName"`
@@ -13,9 +14,26 @@ type SignupFields struct {
 	ConfirmPassword string `json:"confirmPassword"`
 }
 
+// LoginFields login validation field
 type LoginFields struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type CreatPostitFields struct {
+	Content string `json:"content"`
+	Color   string `json:"color"`
+	UserID  int    `json:"userId"`
+}
+
+// CreatePostitValidator validates create postit route
+func CreatePostitValidator(fields *CreatPostitFields) url.Values {
+	rules := govalidator.MapData{
+		"content": []string{"required"},
+		"userId":  []string{"required"},
+		"color":   []string{"required"},
+	}
+	return validate(fields, rules)
 }
 
 // SignupValidator validates signup route
